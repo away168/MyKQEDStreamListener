@@ -47,6 +47,9 @@ namespace MyKQEDStreamListener
 			// aapt resource value: 0x7f020000
 			public const int Icon = 2130837504;
 			
+			// aapt resource value: 0x7f020001
+			public const int KQED = 2130837505;
+			
 			static Drawable()
 			{
 				global::Android.Runtime.ResourceIdManager.UpdateIdValues();
@@ -69,6 +72,18 @@ namespace MyKQEDStreamListener
 			// aapt resource value: 0x7f050002
 			public const int btnStop = 2131034114;
 			
+			// aapt resource value: 0x7f050005
+			public const int notifyBtnPause = 2131034117;
+			
+			// aapt resource value: 0x7f050006
+			public const int notifyBtnPlay = 2131034118;
+			
+			// aapt resource value: 0x7f050003
+			public const int notifyImage = 2131034115;
+			
+			// aapt resource value: 0x7f050004
+			public const int notifyTitle = 2131034116;
+			
 			static Id()
 			{
 				global::Android.Runtime.ResourceIdManager.UpdateIdValues();
@@ -84,6 +99,9 @@ namespace MyKQEDStreamListener
 			
 			// aapt resource value: 0x7f030000
 			public const int Main = 2130903040;
+			
+			// aapt resource value: 0x7f030001
+			public const int Notification = 2130903041;
 			
 			static Layout()
 			{

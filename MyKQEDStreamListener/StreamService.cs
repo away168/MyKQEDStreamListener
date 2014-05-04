@@ -233,8 +233,7 @@ namespace MyKQEDStreamListener
 		//				"Playing: " + songName, pi);
 		//			startForeground(NOTIFICATION_ID, notification);
 
-		//Set sticky as we are a long running operation
-		void StartForeground ()
+		Notification buildNotification()
 		{
 			PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ApplicationContext, typeof(MainActivity)), PendingIntentFlags.CancelCurrent);
 			//PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ActionPlay), PendingIntentFlags.NoCreate);
@@ -243,7 +242,38 @@ namespace MyKQEDStreamListener
 			};
 			notification.SetLatestEventInfo (ApplicationContext, "KQED LiveStream", "TODO: GetCurrentStream", pi);
 
-			StartForeground (NotificationID, notification);
+			return notification;
+		}
+
+		Notification buildCustomNotification(ServiceActions action)
+		{
+			PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ApplicationContext, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
+			PendingIntent play = PendingIntent.GetService (ApplicationContext, 1, new Intent (ActionPlay), PendingIntentFlags.CancelCurrent);
+			PendingIntent pause = PendingIntent.GetService (ApplicationContext, 2, new Intent (ActionPause), PendingIntentFlags.CancelCurrent);
+			Android.App.Notification.Builder builder = new Notification.Builder (ApplicationContext);
+
+			var myRemoteView = new RemoteViews (PackageName, Resource.Layout.Notification);
+
+			builder.SetContent (myRemoteView);
+			// if play
+			if (action == ServiceActions.Play)
+				builder.SetSmallIcon (Android.Resource.Drawable.IcMediaPlay);
+			else if (action == ServiceActions.Pause)
+				builder.SetSmallIcon (Android.Resource.Drawable.IcMediaPause);
+				
+			myRemoteView.SetOnClickPendingIntent (Resource.Id.notifyBtnPause, pause);
+			myRemoteView.SetOnClickPendingIntent (Resource.Id.notifyBtnPlay, play);
+			myRemoteView.SetOnClickPendingIntent (Resource.Id.notifyTitle, pi);
+			myRemoteView.SetImageViewResource (Resource.Id.notifyImage, Resource.Drawable.KQED);
+			myRemoteView.SetTextViewText (Resource.Id.notifyTitle, "KQED 88.5FM LiveStream");
+
+			return builder.Notification;
+		}
+
+		//Set sticky as we are a long running operation
+		void StartForeground ()
+		{
+			StartForeground (NotificationID, buildCustomNotification (ServiceActions.Play));
 		}
 
 		void Start()
@@ -259,6 +289,20 @@ namespace MyKQEDStreamListener
 		{
 			player.Pause ();
 			am.AbandonAudioFocus (this);
+
+//			PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ApplicationContext, typeof(MainActivity)), PendingIntentFlags.CancelCurrent);
+//			var notification = new Notification (Android.Resource.Drawable.IcMediaPause, "KQED LiveStream") {
+//				Flags = NotificationFlags.OngoingEvent,
+//			};
+//
+//			notification.SetLatestEventInfo (ApplicationContext, "KQED LiveStream", "TODO: GetCurrentStream", pi);
+//
+			using ( var notificationManager = GetSystemService (Context.NotificationService) as NotificationManager)
+			{
+//				notificationManager.Notify (NotificationID, notification);
+				notificationManager.Notify (NotificationID, buildCustomNotification(ServiceActions.Pause));
+			}
+
 			currentState = MediaStates.Paused;
 		}
 
@@ -271,7 +315,6 @@ namespace MyKQEDStreamListener
 
 		void StopHelper ()
 		{
-
 			currentState = MediaStates.End;
 
 			if (player != null) {
