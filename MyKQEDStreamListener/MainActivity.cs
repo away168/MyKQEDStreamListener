@@ -7,28 +7,20 @@ using Android.Widget;
 using Android.OS;
 using Android.Media;
 
-/// </summary>
-
 namespace MyKQEDStreamListener {
-	[Activity (Label = "MyKQEDStreamListener", MainLauncher = true)]
+	[Activity (Label = "MyKQEDStreamListener", MainLauncher = true, Theme = "@android:style/Theme.Holo")]
 	public class MainActivity : Activity {
-		//int count = 1;
-
-		bool start = false;
-
+	
 		protected override void OnCreate (Bundle bundle)
 		{
 			base.OnCreate (bundle);
 
 			VolumeControlStream = Stream.Music;
 
-			// Set our view from the "main" layout resource
 			SetContentView (Resource.Layout.Main);
 
-			// Get our button from the layout resource,
-			// and attach an event to it
-			Button button = FindViewById<Button> (Resource.Id.btnPlay);
-			button.Click += delegate
+			Button btnPlay = FindViewById<Button> (Resource.Id.btnPlay);
+			btnPlay.Click += delegate
 			{
 				var intent = new Intent(StreamService.ActionPlay);
 				StartService(intent);
@@ -57,7 +49,6 @@ namespace MyKQEDStreamListener {
 		{
 			base.OnPause ();
 		}
-
 		protected override void OnStop ()
 		{
 			base.OnStop ();

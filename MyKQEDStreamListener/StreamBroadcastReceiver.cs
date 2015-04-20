@@ -8,17 +8,20 @@ using Android.OS;
 using Android.Runtime;
 using Android.Views;
 using Android.Widget;
+using Android.Media;
 
 namespace MyKQEDStreamListener {
 
 	[BroadcastReceiver]
-	[IntentFilter(new string[] {Intent.ActionMediaButton})]
-	public class MediaButtonEventReceiver : BroadcastReceiver {
+	[IntentFilter(new string[] {Intent.ActionMediaButton, AudioManager.ActionAudioBecomingNoisy, AudioManager.ActionScoAudioStateUpdated})]
+	public class StreamBroadcastReceiver : BroadcastReceiver {
 		public override void OnReceive (Context context, Intent intent)
 		{
 			Intent command = null; 
-			if (Intent.ActionMediaButton.Equals(intent.Action))
+
+			switch (intent.Action)
 			{
+			case Intent.ActionMediaButton:
 				var keypress = intent.Extras.Get(Intent.ExtraKeyEvent) as KeyEvent;
 				switch (keypress.KeyCode)
 				{
@@ -31,9 +34,23 @@ namespace MyKQEDStreamListener {
 					command = new Intent (StreamService.ActionPause);
 					break;
 				}
-				if (command != null)
-					context.StartService (command);
+				break;
+
+			case AudioManager.ActionAudioBecomingNoisy:
+				command = new Intent (StreamService.ActionPause);
+				break;
+
+			case AudioManager.ActionScoAudioStateUpdated:
+				var audioState = (ScoAudioState)intent.Extras.GetInt (AudioManager.ExtraScoAudioState);
+				if (audioState == ScoAudioState.Disconnected)
+				{
+					command = new Intent (StreamService.ActionPause);
+				}
+				break;
 			}
+			if (command != null)
+				context.StartService (command);
+				
 			Toast.MakeText (context, String.Format("Received intent! {0}", intent.ToString()), ToastLength.Short).Show ();
 		}
 	}

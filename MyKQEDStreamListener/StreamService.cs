@@ -47,6 +47,7 @@ namespace MyKQEDStreamListener
 		public const string ActionPlay = "net.wayfamily.action.PLAY";
 		public const string ActionPause = "net.wayfamily.action.PAUSE";
 		public const string ActionStop = "net.wayfamily.action.STOP";
+		public const string ActionTogglePlay = "net.wayfamily.action.TOGGLEPLAY";
 	
 		const string OGKQEDSource = @"http://streams.kqed.org/kqedradio.m3u";
 		const string KQEDSOURCE = @"http://streams2.kqed.org:80/kqedradio";
@@ -55,11 +56,13 @@ namespace MyKQEDStreamListener
 
 		AudioManager am;
 		WifiManager.WifiLock wifiLock;
+		ComponentName mediaComponent;
 		MediaPlayer player;
 
 		// State Machine!
-		async Task HandleAction(ServiceActions action)
+		async Task HandleActionAsync(ServiceActions action)
 		{
+			Console.WriteLine ("action: {0}, state: {1}", action, currentState);
 			if (action == ServiceActions.Play)
 			{
 				switch (currentState)
@@ -72,7 +75,7 @@ namespace MyKQEDStreamListener
 				case MediaStates.Idle:
 					await player.SetDataSourceAsync (ApplicationContext, Android.Net.Uri.Parse (KQEDSOURCE));
 					currentState = MediaStates.Initialized;
-					await HandleAction (ServiceActions.Play);
+					await HandleActionAsync (ServiceActions.Play);
 					break;
 				case MediaStates.Initialized:
 					player.PrepareAsync ();
@@ -133,6 +136,7 @@ namespace MyKQEDStreamListener
 		/// </summary>
 		async Task initializePlayer ()
 		{
+			Toast.MakeText (ApplicationContext, "Starting Stream...", ToastLength.Short).Show ();
 			player = new MediaPlayer ();
 			player.SetAudioStreamType (Stream.Music);
 			player.SetWakeMode (ApplicationContext, WakeLockFlags.Partial); // this keeps the player alive when the screen goes to sleep. 
@@ -140,18 +144,19 @@ namespace MyKQEDStreamListener
 			player.Prepared += async (sender, e) =>
 			{
 				currentState = MediaStates.Prepared;
-				await HandleAction (ServiceActions.Play);
+				await HandleActionAsync (ServiceActions.Play);
 			};
 
 			player.Error += (sender, e) =>
 			{
+				Toast.MakeText (ApplicationContext, "Error Starting Stream...", ToastLength.Short).Show ();
 				currentState = MediaStates.Error;
 				player.Release ();
 				player.Dispose ();
 				Console.WriteLine ("StreamService : MediaPlayer Error {0}", e.What);
 			};
 			currentState = MediaStates.Idle;
-			await HandleAction (ServiceActions.Play);
+			await HandleActionAsync (ServiceActions.Play);
 		}
 
 		// stop the player if we lose focus / play if we get it back
@@ -160,17 +165,22 @@ namespace MyKQEDStreamListener
 			switch (focusChange)
 			{
 			case AudioFocus.Loss:
-				HandleAction (ServiceActions.Pause);
+			case AudioFocus.LossTransient:
+				HandleActionAsync (ServiceActions.Pause);
 				break;
 			case AudioFocus.Gain:
-				HandleAction (ServiceActions.Play);
+				//case AudioFocus.GainTransient:
+					HandleActionAsync (ServiceActions.Play);
 				break;
 			case AudioFocus.LossTransientCanDuck:
+				player.SetVolume (0.2f, 0.2f);
 				// lower volume
 				break;
 			case AudioFocus.GainTransientMayDuck:
+				player.SetVolume(1f, 1f);
 				// bring back volume
 				break;
+
 			}
 		}
 
@@ -182,18 +192,25 @@ namespace MyKQEDStreamListener
 
 			currentState = MediaStates.Zero;
 			am = GetSystemService (Context.AudioService) as AudioManager;
+			am.RegisterMediaButtonEventReceiver (mediaComponent);
+
 			wifiLock = ((WifiManager)GetSystemService (Context.WifiService)).CreateWifiLock (Android.Net.WifiMode.Full, "myServiceLock");
-			//am.RegisterMediaButtonEventReceiver (MyKQEDStreamReceiver);
+			mediaComponent = new ComponentName(ApplicationContext, new StreamBroadcastReceiver().Class);
 		}
 
 		public override StartCommandResult OnStartCommand (Intent intent, StartCommandFlags flags, int startId)
 		{
 			lastStartId = startId;
 			switch (intent.Action) {
-			case ActionPlay: HandleAction(ServiceActions.Play); break;
-			case ActionStop: HandleAction(ServiceActions.Stop); break;
-			case ActionPause:
-				HandleAction (ServiceActions.Pause); break;
+			case ActionPlay: HandleActionAsync(ServiceActions.Play); break;
+			case ActionStop: HandleActionAsync(ServiceActions.Stop); break;
+			case ActionPause: HandleActionAsync (ServiceActions.Pause); break;
+			case ActionTogglePlay: 
+				if (currentState == MediaStates.Started)
+					HandleActionAsync (ServiceActions.Pause);
+				else
+					HandleActionAsync (ServiceActions.Play);
+				break;
 			}
 
 			return StartCommandResult.Sticky;
@@ -247,7 +264,7 @@ namespace MyKQEDStreamListener
 
 		Notification buildCustomNotification(ServiceActions action)
 		{
-			PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ApplicationContext, typeof(MainActivity)), PendingIntentFlags.UpdateCurrent);
+			PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ApplicationContext, typeof(MainActivity)), PendingIntentFlags.CancelCurrent);
 			PendingIntent play = PendingIntent.GetService (ApplicationContext, 1, new Intent (ActionPlay), PendingIntentFlags.CancelCurrent);
 			PendingIntent pause = PendingIntent.GetService (ApplicationContext, 2, new Intent (ActionPause), PendingIntentFlags.CancelCurrent);
 			Android.App.Notification.Builder builder = new Notification.Builder (ApplicationContext);
@@ -257,15 +274,20 @@ namespace MyKQEDStreamListener
 			builder.SetContent (myRemoteView);
 			// if play
 			if (action == ServiceActions.Play)
+			{
 				builder.SetSmallIcon (Android.Resource.Drawable.IcMediaPlay);
+				myRemoteView.SetTextViewText (Resource.Id.notifyTitle, "KQED 88.5FM LiveStream");
+			}	
 			else if (action == ServiceActions.Pause)
+			{
 				builder.SetSmallIcon (Android.Resource.Drawable.IcMediaPause);
-				
+				myRemoteView.SetTextViewText (Resource.Id.notifyTitle, "Paused: KQED 88.5FM LiveStream");
+			}	
+
 			myRemoteView.SetOnClickPendingIntent (Resource.Id.notifyBtnPause, pause);
 			myRemoteView.SetOnClickPendingIntent (Resource.Id.notifyBtnPlay, play);
 			myRemoteView.SetOnClickPendingIntent (Resource.Id.notifyTitle, pi);
 			myRemoteView.SetImageViewResource (Resource.Id.notifyImage, Resource.Drawable.KQED);
-			myRemoteView.SetTextViewText (Resource.Id.notifyTitle, "KQED 88.5FM LiveStream");
 
 			return builder.Notification;
 		}
@@ -278,6 +300,7 @@ namespace MyKQEDStreamListener
 
 		void Start()
 		{
+			Toast.MakeText (ApplicationContext, "Stream Playing", ToastLength.Short).Show ();
 			player.Start ();
 			am.RequestAudioFocus (this, Stream.Music, AudioFocus.Gain);
 			wifiLock.Acquire ();
@@ -287,16 +310,10 @@ namespace MyKQEDStreamListener
 
 		void Pause()
 		{
+			Toast.MakeText (ApplicationContext, "Stream Paused", ToastLength.Short).Show ();
 			player.Pause ();
 			am.AbandonAudioFocus (this);
 
-//			PendingIntent pi = PendingIntent.GetActivity (ApplicationContext, 0, new Intent (ApplicationContext, typeof(MainActivity)), PendingIntentFlags.CancelCurrent);
-//			var notification = new Notification (Android.Resource.Drawable.IcMediaPause, "KQED LiveStream") {
-//				Flags = NotificationFlags.OngoingEvent,
-//			};
-//
-//			notification.SetLatestEventInfo (ApplicationContext, "KQED LiveStream", "TODO: GetCurrentStream", pi);
-//
 			using ( var notificationManager = GetSystemService (Context.NotificationService) as NotificationManager)
 			{
 //				notificationManager.Notify (NotificationID, notification);
@@ -308,6 +325,7 @@ namespace MyKQEDStreamListener
 
 		void Stop()
 		{
+			Toast.MakeText (ApplicationContext, "Stream Stopped", ToastLength.Short).Show ();
 			StopSelf (lastStartId);
 			//am.UnregisterMediaButtonEventReceiver ();
 			//am.UnregisterRemoteControlClient ();
@@ -320,9 +338,16 @@ namespace MyKQEDStreamListener
 			if (player != null) {
 				player.Stop ();
 				player.Release ();
-				player = null;
+				player.Dispose ();
 			}
 			wifiLock.Release ();
+			wifiLock.Dispose ();
+
+			am.UnregisterMediaButtonEventReceiver (mediaComponent);
+			am.Dispose ();
+
+			mediaComponent.Dispose();
+
 			StopForeground (true);
 		}
 	}

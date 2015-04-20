@@ -1,2 +1,12 @@
 obj/
 bin/
+*.DS_Store
+*.sln.cache
+*.suo
+*.userprefs
+*.usertasks
+*.user
+
+Components
+packages
+Resource.designer.cs
